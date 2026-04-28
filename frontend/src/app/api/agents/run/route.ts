@@ -17,13 +17,28 @@ export async function POST(request: NextRequest) {
     const res = await fetch(`${AGENT_URL}/api/agents/run?command=${encodeURIComponent(command)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(300000),
     });
 
-    const data = await res.json();
-    return NextResponse.json(data);
-  } catch (err) {
+    const contentType = res.headers.get("content-type") || "";
+
+    if (contentType.includes("application/json")) {
+      const data = await res.json();
+      return NextResponse.json(data);
+    }
+
+    const text = await res.text();
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Agent service unavailable" },
+      {
+        error: `Backend returned status ${res.status}`,
+        details: text.substring(0, 1000),
+      },
+      { status: 502 }
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Agent service unavailable";
+    return NextResponse.json(
+      { error: message },
       { status: 500 }
     );
   }
