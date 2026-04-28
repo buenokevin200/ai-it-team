@@ -228,14 +228,7 @@ export default function AgentMesh() {
         attributionPosition="bottom-left"
       >
         <Background color="#1e1e2e" gap={20} />
-        <Controls
-          style={{
-            background: "#12121a",
-            border: "1px solid #1e1e2e",
-            borderRadius: "8px",
-            button: { color: "#cdd6f4", fill: "#cdd6f4" },
-          }}
-        />
+        <Controls className="!bg-[#12121a] !border-[#1e1e2e] !rounded-lg" />
         <MiniMap
           style={{
             background: "#12121a",
