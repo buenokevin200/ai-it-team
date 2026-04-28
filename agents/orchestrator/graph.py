@@ -67,7 +67,7 @@ def parse_intent(state: AgentState) -> AgentState:
     user_input = state["user_input"].lower()
 
     try:
-        from agents.llm.brain import AgentBrain
+        from llm.brain import AgentBrain
 
         brain = AgentBrain()
         intent = brain.intent(user_input)
