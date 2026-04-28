@@ -13,6 +13,9 @@ const PRESET_CATEGORIES = [
   { value: "hwc_project_id", label: "Project ID" },
   { value: "ssh_private_key", label: "SSH Private Key" },
   { value: "ssh_username", label: "SSH Username" },
+  { value: "kubeconfig", label: "Kubeconfig (CCE)" },
+  { value: "helm_release", label: "Helm Release Name" },
+  { value: "helm_chart", label: "Helm Chart" },
 ];
 
 export default function SecretsPanel({ onLog }: Props) {

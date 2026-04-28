@@ -116,3 +116,43 @@ async def store_deployment(deployment: dict) -> str:
     await db.commit()
     await db.close()
     return dep_id
+
+
+async def get_config(name: str) -> Optional[str]:
+    db = await get_db()
+    cursor = await db.execute("SELECT name, category FROM secrets WHERE name = ?", (name,))
+    row = await cursor.fetchone()
+    await db.close()
+    return dict(row) if row else None
+
+
+async def get_all_config():
+    db = await get_db()
+    cursor = await db.execute("SELECT id, name, category, created_at, updated_at FROM secrets ORDER BY category, name")
+    rows = await cursor.fetchall()
+    await db.close()
+    results = []
+    for row in rows:
+        results.append({
+            "name": row[1],
+            "category": row[2],
+            "configured": True,
+            "value": "••••••••",
+            "created_at": row[3],
+            "updated_at": row[4],
+        })
+    return results
+
+
+def get_config_sync(name: str) -> Optional[str]:
+    import os
+    db_path = os.getenv("DATABASE_PATH", "shared/db/agents.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.execute("SELECT encrypted_value FROM secrets WHERE name = ?", (name,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        from tools.crypto import SecretCrypto
+        crypto = SecretCrypto()
+        return crypto.decrypt(row[0])
+    return None

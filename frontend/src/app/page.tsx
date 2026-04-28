@@ -3,9 +3,9 @@
 import { useState } from "react";
 import LogViewer from "@/components/LogViewer";
 import Console from "@/components/Console";
-import SecretsPanel from "@/components/SecretsPanel";
+import ConfigPanel from "@/components/ConfigPanel";
 
-type Panel = "logs" | "console" | "secrets";
+type Panel = "logs" | "console" | "config";
 
 export default function Dashboard() {
   const [activePanel, setActivePanel] = useState<Panel>("console");
@@ -44,7 +44,7 @@ export default function Dashboard() {
           </span>
         </div>
         <nav className="flex gap-1">
-          {(["console", "logs", "secrets"] as Panel[]).map((p) => (
+          {(["console", "logs", "config"] as Panel[]).map((p) => (
             <button
               key={p}
               onClick={() => setActivePanel(p)}
@@ -54,7 +54,7 @@ export default function Dashboard() {
                   : "text-terminal-muted hover:text-terminal-white"
               }`}
             >
-              {p === "console" ? "Console" : p === "logs" ? "Logs" : "Secrets"}
+              {p === "console" ? "Console" : p === "logs" ? "Logs" : "Configuracion"}
             </button>
           ))}
         </nav>
@@ -70,7 +70,7 @@ export default function Dashboard() {
           <Console onLog={addLog} onResult={handleCommandResult} />
         )}
         {activePanel === "logs" && <LogViewer logs={logs} />}
-        {activePanel === "secrets" && <SecretsPanel onLog={addLog} />}
+        {activePanel === "config" && <ConfigPanel onLog={addLog} />}
       </main>
 
       <footer className="border-t border-terminal-border bg-terminal-panel px-6 py-1.5 flex items-center justify-between text-xs text-terminal-muted">

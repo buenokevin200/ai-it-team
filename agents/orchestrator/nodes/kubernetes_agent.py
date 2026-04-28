@@ -1,5 +1,6 @@
 import os
 
+from tools.db import get_config_sync
 from ..state import AgentState
 
 
@@ -15,7 +16,7 @@ def kubernetes_node(state: AgentState) -> AgentState:
         "session_id": session_id,
     })
 
-    kubeconfig_content = os.getenv("KUBECONFIG_CONTENT", "")
+    kubeconfig_content = get_config_sync("kubeconfig") or os.getenv("KUBECONFIG_CONTENT", "")
     if not kubeconfig_content:
         logs.append({
             "agent_type": "kubernetes",
@@ -44,9 +45,9 @@ def kubernetes_node(state: AgentState) -> AgentState:
             "session_id": session_id,
         })
 
-        if os.getenv("HELM_RELEASE") and os.getenv("HELM_CHART"):
-            release = os.getenv("HELM_RELEASE", f"app-{namespace}")
-            chart = os.getenv("HELM_CHART", "stable/nginx")
+        if get_config_sync("helm_release") or os.getenv("HELM_RELEASE"):
+            release = get_config_sync("helm_release") or os.getenv("HELM_RELEASE", f"app-{namespace}")
+            chart = get_config_sync("helm_chart") or os.getenv("HELM_CHART", "stable/nginx")
             helm_result = client.helm_install(release, chart, namespace)
             logs.append({
                 "agent_type": "kubernetes",

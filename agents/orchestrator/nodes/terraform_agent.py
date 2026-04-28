@@ -5,6 +5,7 @@ import tempfile
 import subprocess
 from datetime import datetime
 
+from tools.db import get_config_sync
 from ..state import AgentState
 
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "tools", "huawei_tf")
@@ -128,10 +129,10 @@ def terraform_node(state: AgentState) -> AgentState:
         generate_ecs_tf(work_dir, stack_name)
 
         tf_env = os.environ.copy()
-        tf_env["TF_VAR_region"] = os.getenv("TF_VAR_region", "la-north-2")
-        tf_env["TF_VAR_access_key"] = os.getenv("TF_VAR_access_key", "")
-        tf_env["TF_VAR_secret_key"] = os.getenv("TF_VAR_secret_key", "")
-        tf_env["TF_VAR_project_id"] = os.getenv("TF_VAR_project_id", "")
+        tf_env["TF_VAR_region"] = get_config_sync("hwc_region") or os.getenv("TF_VAR_region", "la-north-2")
+        tf_env["TF_VAR_access_key"] = get_config_sync("hwc_access_key") or os.getenv("TF_VAR_access_key", "")
+        tf_env["TF_VAR_secret_key"] = get_config_sync("hwc_secret_key") or os.getenv("TF_VAR_secret_key", "")
+        tf_env["TF_VAR_project_id"] = get_config_sync("hwc_project_id") or os.getenv("TF_VAR_project_id", "")
 
         init_result = subprocess.run(
             ["terraform", "init"],

@@ -22,6 +22,24 @@ docker compose up --build
 - Dashboard: http://localhost:3000
 - Agent API: http://localhost:8000/health
 
+### Configuracion Inicial
+
+Todas las credenciales se gestionan desde la pestana **"Configuracion"** del Dashboard. Los campos requeridos:
+
+| Campo | Descripcion |
+|-------|-------------|
+| Access Key (AK) | Huawei Cloud Access Key |
+| Secret Key (SK) | Huawei Cloud Secret Key |
+| Region | Region HWC (ej. `la-north-2`) |
+| Project ID | ID del proyecto HWC |
+| SSH Private Key | Clave privada RSA PEM para ECS |
+| SSH Username | Usuario SSH (default: root) |
+| Kubeconfig | Config YAML del cluster CCE |
+| Helm Release Name | Nombre del release Helm |
+| Helm Chart | Chart Helm (ej. `stable/nginx-ingress`) |
+
+Los valores sensibles se cifran con Fernet (AES-128) antes de persistir en SQLite.
+
 ## Agents
 
 | Agente | Proposito |

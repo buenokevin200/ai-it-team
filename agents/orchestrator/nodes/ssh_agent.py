@@ -1,3 +1,4 @@
+from tools.db import get_config_sync
 from ..state import AgentState
 
 
@@ -24,15 +25,11 @@ def ssh_node(state: AgentState) -> AgentState:
         state["logs"] = logs
         return state
 
-    ssh_username = "root"
-    ssh_key_pem = ""
-
     import os
-    env_key = os.getenv("SSH_PRIVATE_KEY", "")
+    ssh_username = get_config_sync("ssh_username") or os.getenv("SSH_USERNAME", "root")
+    ssh_key_pem = get_config_sync("ssh_private_key") or os.getenv("SSH_PRIVATE_KEY", "")
 
-    if env_key:
-        ssh_key_pem = env_key
-    else:
+    if not ssh_key_pem:
         logs.append({
             "agent_type": "ssh",
             "level": "WARN",

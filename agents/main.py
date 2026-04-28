@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from tools.db import init_db, store_secret, get_secret_encrypted, get_all_secrets, delete_secret, store_log, get_session_logs, store_deployment
+from tools.db import init_db, store_secret, get_secret_encrypted, get_all_secrets, delete_secret, store_log, get_session_logs, store_deployment, get_all_config
 from tools.crypto import SecretCrypto
 from orchestrator.graph import graph
 from orchestrator.state import AgentState
@@ -55,6 +55,19 @@ async def list_secrets():
 async def remove_secret(name: str):
     deleted = await delete_secret(name)
     return {"deleted": deleted, "name": name}
+
+
+@app.get("/api/config")
+async def get_config():
+    config = await get_all_config()
+    return {"config": config}
+
+
+@app.post("/api/config")
+async def save_config(name: str, category: str, value: str):
+    encrypted = crypto.encrypt(value)
+    secret_id = await store_secret(name, category, encrypted)
+    return {"id": secret_id, "name": name, "category": category, "status": "stored"}
 
 
 @app.post("/api/agents/run")
