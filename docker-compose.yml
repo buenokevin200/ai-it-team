@@ -1,0 +1,33 @@
+version: "3.9"
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./shared/db:/app/db
+      - ./frontend/src:/app/src
+    environment:
+      - NODE_ENV=development
+      - AGENT_SERVICE_URL=http://agents:8000
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-dev-key-change-me-in-production}
+      - DATABASE_PATH=/app/db/agents.db
+    depends_on:
+      - agents
+
+  agents:
+    build:
+      context: ./agents
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./shared/db:/app/db
+      - ./agents:/app
+    environment:
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-dev-key-change-me-in-production}
+      - TF_IN_AUTOMATION=true
+      - DATABASE_PATH=/app/db/agents.db
