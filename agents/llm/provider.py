@@ -41,6 +41,8 @@ class LLMProvider:
             api_key=self._deepseek_key,
             base_url=self._deepseek_url,
             temperature=temperature,
+            timeout=15,
+            max_retries=0,
         )
 
     def get_reasoning_llm(self) -> ChatOpenAI:

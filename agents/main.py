@@ -1,5 +1,5 @@
 import os
-import uuid
+import asyncio
 from datetime import datetime
 from typing import Optional
 
@@ -154,7 +154,8 @@ async def run_agent(command: str):
         _agent_metrics["orchestrator"]["runs"] += 1
         _agent_metrics["ai_brain"]["runs"] += 1
 
-        result = graph.invoke(initial_state)
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, graph.invoke, initial_state)
 
         status = "success"
         if result.get("error"):

@@ -66,53 +66,60 @@ def _fallback_intent(user_input: str) -> str:
 def parse_intent(state: AgentState) -> AgentState:
     user_input = state["user_input"].lower()
 
-    try:
-        from llm.brain import AgentBrain
+    from tools.db import get_config_sync
+    deepseek_configured = bool(get_config_sync("ai_deepseek_api_key"))
 
-        brain = AgentBrain()
-        intent = brain.intent(user_input)
-        explanation = brain.explain_plan(user_input, intent)
+    if deepseek_configured:
+        try:
+            from llm.brain import AgentBrain
 
-        if intent == "unknown":
-            intent = _fallback_intent(user_input)
-            explanation = f"No se pudo determinar intencion. Usando fallback: {intent}"
+            brain = AgentBrain()
+            intent = brain.intent(user_input)
+            explanation = brain.explain_plan(user_input, intent)
 
-        state["intent"] = intent
-        state["intent_explanation"] = explanation
-        state["needs_confirmation"] = brain.needs_confirmation(intent, user_input)
+            if intent == "unknown":
+                intent = _fallback_intent(user_input)
+                explanation = f"No se pudo determinar intencion. Usando fallback: {intent}"
 
-        state["logs"] = state.get("logs", []) + [
-            {
-                "agent_type": "ai_brain",
-                "level": "INFO",
-                "message": f"[Deepseek] Intencion: {intent}",
-                "session_id": state["session_id"],
-            },
-            {
-                "agent_type": "orchestrator",
-                "level": "INFO",
-                "message": f"Plan: {explanation}",
-                "session_id": state["session_id"],
-            },
-        ]
-        if state["needs_confirmation"]:
-            state["logs"].append({
-                "agent_type": "orchestrator",
-                "level": "WARN",
-                "message": "Accion destructiva detectada. Requiere confirmacion humana.",
-                "session_id": state["session_id"],
-            })
-    except Exception:
-        intent = _fallback_intent(user_input)
-        state["intent"] = intent
-        state["logs"] = state.get("logs", []) + [
-            {
-                "agent_type": "orchestrator",
-                "level": "INFO",
-                "message": f"Intencion clasificada (fallback): {intent}",
-                "session_id": state["session_id"],
-            }
-        ]
+            state["intent"] = intent
+            state["intent_explanation"] = explanation
+            state["needs_confirmation"] = brain.needs_confirmation(intent, user_input)
+
+            state["logs"] = state.get("logs", []) + [
+                {
+                    "agent_type": "ai_brain",
+                    "level": "INFO",
+                    "message": f"[Deepseek] Intencion: {intent}",
+                    "session_id": state["session_id"],
+                },
+                {
+                    "agent_type": "orchestrator",
+                    "level": "INFO",
+                    "message": f"Plan: {explanation}",
+                    "session_id": state["session_id"],
+                },
+            ]
+            if state["needs_confirmation"]:
+                state["logs"].append({
+                    "agent_type": "orchestrator",
+                    "level": "WARN",
+                    "message": "Accion destructiva detectada. Requiere confirmacion humana.",
+                    "session_id": state["session_id"],
+                })
+            return state
+        except Exception:
+            pass
+
+    intent = _fallback_intent(user_input)
+    state["intent"] = intent
+    state["logs"] = state.get("logs", []) + [
+        {
+            "agent_type": "orchestrator",
+            "level": "INFO",
+            "message": f"Intencion clasificada: {intent}",
+            "session_id": state["session_id"],
+        }
+    ]
 
     return state
 
