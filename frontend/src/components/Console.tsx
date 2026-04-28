@@ -38,10 +38,10 @@ export default function Console({ onLog, onResult }: Props) {
       }
 
       try {
-        const res = await fetch(`/api/deployments/${sid}`);
+        const res = await fetch(`/api/deployments/${encodeURIComponent(sid)}`);
         const data = await res.json();
 
-        const logsRes = await fetch(`/api/logs/${sid}`);
+        const logsRes = await fetch(`/api/logs/${encodeURIComponent(sid)}`);
         const logsData = await logsRes.json();
         if (logsData.logs) {
           logsData.logs.forEach((log: { message: string; agent_type: string; level: string }) => {
