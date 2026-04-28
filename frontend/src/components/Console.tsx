@@ -20,11 +20,64 @@ export default function Console({ onLog, onResult }: Props) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  const pollResult = async (sid: string) => {
+    while (true) {
+      await new Promise((r) => setTimeout(r, 2000));
+      try {
+        const res = await fetch(`/api/deployments/${sid}`);
+        const data = await res.json();
+
+        const logsRes = await fetch(`/api/logs/${sid}`);
+        const logsData = await logsRes.json();
+        if (logsData.logs) {
+          logsData.logs.forEach((log: { message: string; agent_type: string; level: string }) => {
+            const prefix = log.agent_type === "ai_brain" ? "[AI Brain]" : `[${log.agent_type}]`;
+            const line = `${prefix} ${log.message}`;
+            setHistory((prev) => {
+              if (prev.includes(line)) return prev;
+              return [...prev, line];
+            });
+          });
+        }
+
+        if (data.status === "processing" || data.status === "unknown") {
+          continue;
+        }
+
+        onResult({
+          session_id: sid,
+          status: data.status,
+          intent: data.intent,
+          intent_explanation: data.intent_explanation,
+          needs_confirmation: data.needs_confirmation,
+          result: data.result,
+          error: data.error,
+          details: data.details,
+        });
+
+        if (data.intent_explanation) {
+          setHistory((prev) => [...prev, `[AI Brain] ${data.intent_explanation}`]);
+        }
+        if (data.needs_confirmation) {
+          setHistory((prev) => [...prev, "⚠ ACCION DESTRUCTIVA DETECTADA"]);
+        }
+        if (data.error) {
+          setHistory((prev) => [...prev, `ERROR: ${data.error}`]);
+        }
+        setLoading(false);
+        return;
+      } catch {
+        continue;
+      }
+    }
+  };
 
   const executeCommand = async (command: string) => {
     if (!command.trim()) return;
@@ -42,24 +95,21 @@ export default function Console({ onLog, onResult }: Props) {
         body: JSON.stringify({ command: trimmed }),
       });
       const data = await res.json();
-      onResult(data);
 
-      if (data.intent_explanation) {
-        setHistory((prev) => [...prev, `[AI Brain] ${data.intent_explanation}`]);
-      }
-      if (data.needs_confirmation) {
-        setHistory((prev) => [...prev, "⚠ ACCION DESTRUCTIVA DETECTADA - Confirmacion requerida"]);
-      }
-      if (data.error) {
-        setHistory((prev) => [...prev, `ERROR: ${data.error}`]);
+      if (data.status === "processing" && data.session_id) {
+        setSessionId(data.session_id);
+        setHistory((prev) => [...prev, "Procesando... (los logs apareceran en tiempo real)"]);
+        onLog(`SESSION: ${data.session_id}`);
+        pollResult(data.session_id);
+      } else {
+        onResult(data);
+        setLoading(false);
       }
     } catch (err) {
       const msg = `Error: ${err instanceof Error ? err.message : "unknown"}`;
       onLog(msg);
       setHistory((prev) => [...prev, msg]);
-    } finally {
       setLoading(false);
-      inputRef.current?.focus();
     }
   };
 
@@ -93,9 +143,12 @@ export default function Console({ onLog, onResult }: Props) {
             {history.map((line, i) => {
               let color = "text-terminal-white";
               if (line.startsWith("$")) color = "text-terminal-cyan";
-              else if (line.startsWith("[AI Brain]")) color = "text-purple-400";
+              else if (line.includes("[AI Brain]") || line.startsWith("[AI Brain]")) color = "text-purple-400";
               else if (line.startsWith("ERROR")) color = "text-red-400";
               else if (line.includes("⚠")) color = "text-yellow-400";
+              else if (line.startsWith("[terraform]")) color = "text-terminal-green";
+              else if (line.startsWith("[ssh]")) color = "text-terminal-cyan";
+              else if (line.startsWith("[kubernetes]")) color = "text-terminal-muted";
 
               return (
                 <div key={i} className={`text-sm py-0.5 ${color}`}>
@@ -125,7 +178,7 @@ export default function Console({ onLog, onResult }: Props) {
           disabled={loading || !input.trim()}
           className="terminal-btn-primary"
         >
-          {loading ? "AI pensando..." : "Run"}
+          {loading ? "Ejecutando..." : "Run"}
         </button>
       </div>
     </div>

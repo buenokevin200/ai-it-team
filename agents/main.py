@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from tools.db import init_db, store_secret, get_secret_encrypted, get_all_secrets, delete_secret, store_log, get_session_logs, store_deployment, get_all_config, get_config_sync
+from tools.db import init_db, store_secret, get_secret_encrypted, get_all_secrets, delete_secret, store_log, get_session_logs, store_deployment, get_all_config, get_config_sync, store_log_sync, update_deployment_sync
 from tools.crypto import SecretCrypto
 from orchestrator.graph import graph
 from orchestrator.state import AgentState
@@ -35,6 +35,8 @@ _agent_metrics = {
     "kubernetes": {"runs": 0, "success": 0, "errors": 0},
     "ai_brain": {"runs": 0, "success": 0, "errors": 0},
 }
+
+_running_sessions: dict[str, dict] = {}
 
 
 def get_ai_status() -> dict:
@@ -140,23 +142,19 @@ async def agent_status():
     }
 
 
-@app.post("/api/agents/run")
-async def run_agent(command: str):
-    session_id = f"session_{datetime.utcnow().timestamp()}"
-    initial_state: AgentState = {
-        "user_input": command,
-        "session_id": session_id,
-        "logs": [],
-        "stack_name": f"stack-{uuid.uuid4().hex[:8]}",
-        "needs_confirmation": False,
-    }
-
+def _run_graph_in_thread(session_id: str, initial_state: AgentState, command: str):
     try:
         _agent_metrics["orchestrator"]["runs"] += 1
         _agent_metrics["ai_brain"]["runs"] += 1
 
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, graph.invoke, initial_state)
+        store_log_sync({
+            "session_id": session_id,
+            "agent_type": "orchestrator",
+            "level": "INFO",
+            "message": f"Iniciando ejecucion: {command[:100]}",
+        })
+
+        result = graph.invoke(initial_state)
 
         status = "success"
         if result.get("error"):
@@ -166,27 +164,11 @@ async def run_agent(command: str):
             _agent_metrics["orchestrator"]["success"] += 1
         _agent_metrics["ai_brain"]["success"] += 1
 
-        await store_deployment({
-            "session_id": session_id,
-            "stack_name": result.get("stack_name", ""),
-            "status": status,
-            "tf_plan_path": result.get("tf_plan_path"),
-            "ecs_ips": str(result.get("ecs_ips", [])),
-            "output": str(result.get("ssh_result") or result.get("kube_result")),
-            "error": result.get("error"),
-        })
         for log in result.get("logs", []):
-            await store_log(log)
+            store_log_sync(log)
 
-        if result.get("intent") == "terraform":
-            agent_key = "terraform"
-        elif result.get("intent") == "ssh":
-            agent_key = "ssh"
-        elif result.get("intent") == "kubernetes":
-            agent_key = "kubernetes"
-        else:
-            agent_key = None
-
+        intent = result.get("intent", "")
+        agent_key = intent if intent in ("terraform", "ssh", "kubernetes") else None
         if agent_key:
             _agent_metrics[agent_key]["runs"] += 1
             if status == "success":
@@ -194,30 +176,109 @@ async def run_agent(command: str):
             else:
                 _agent_metrics[agent_key]["errors"] += 1
 
-        return {
-            "session_id": result.get("session_id"),
+        output = str(result.get("ssh_result") or result.get("kube_result") or "")
+        _running_sessions[session_id] = {
             "status": status,
-            "intent": result.get("intent"),
+            "intent": intent,
             "intent_explanation": result.get("intent_explanation"),
             "needs_confirmation": result.get("needs_confirmation", False),
-            "result": str(result.get("ssh_result") or result.get("kube_result") or result.get("ai_suggestion") or "ok"),
+            "result": output,
             "error": result.get("error"),
-            "details": {
-                "ecs_ip": result.get("ecs_ip"),
-                "stack_name": result.get("stack_name"),
-            },
+            "ecs_ip": result.get("ecs_ip"),
+            "stack_name": result.get("stack_name"),
         }
+
+        _running_sessions[session_id] = {
+            "status": status,
+            "intent": intent,
+            "intent_explanation": result.get("intent_explanation"),
+            "needs_confirmation": result.get("needs_confirmation", False),
+            "result": output,
+            "error": result.get("error"),
+            "ecs_ip": result.get("ecs_ip"),
+            "stack_name": result.get("stack_name"),
+        }
+
+        store_log_sync({
+            "session_id": session_id,
+            "agent_type": "orchestrator",
+            "level": "INFO" if status == "success" else "ERROR",
+            "message": f"Ejecucion completada: {status}",
+        })
     except Exception as e:
         _agent_metrics["orchestrator"]["errors"] += 1
+        _running_sessions[session_id] = {
+            "status": "error",
+            "error": str(e),
+        }
+        store_log_sync({
+            "session_id": session_id,
+            "agent_type": "orchestrator",
+            "level": "ERROR",
+            "message": f"Error: {str(e)}",
+        })
+
+
+@app.post("/api/agents/run")
+async def run_agent(command: str):
+    session_id = f"session_{datetime.utcnow().timestamp()}"
+
+    store_log_sync({
+        "session_id": session_id,
+        "agent_type": "orchestrator",
+        "level": "INFO",
+        "message": f"Recibido comando: {command[:100]}",
+    })
+
+    _running_sessions[session_id] = {"status": "processing", "intent": None, "result": None, "error": None}
+
+    initial_state: AgentState = {
+        "user_input": command,
+        "session_id": session_id,
+        "logs": [],
+        "stack_name": f"stack-{uuid.uuid4().hex[:8]}",
+        "needs_confirmation": False,
+    }
+
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, _run_graph_in_thread, session_id, initial_state, command)
+
+    return {
+        "session_id": session_id,
+        "status": "processing",
+        "intent": None,
+        "result": None,
+        "error": None,
+        "details": {},
+    }
+
+
+@app.get("/api/deployments/{session_id}")
+async def get_deployment(session_id: str):
+    session = _running_sessions.get(session_id)
+    if session:
         return {
             "session_id": session_id,
-            "status": "error",
-            "intent": "unknown",
-            "result": None,
-            "needs_confirmation": False,
-            "error": str(e),
-            "details": {},
+            "status": session.get("status", "unknown"),
+            "intent": session.get("intent"),
+            "intent_explanation": session.get("intent_explanation"),
+            "needs_confirmation": session.get("needs_confirmation", False),
+            "result": session.get("result"),
+            "error": session.get("error"),
+            "details": {
+                "ecs_ip": session.get("ecs_ip"),
+                "stack_name": session.get("stack_name"),
+            },
         }
+    logs = await get_session_logs(session_id)
+    return {
+        "session_id": session_id,
+        "status": "unknown" if not logs else "completed",
+        "intent": None,
+        "result": None,
+        "error": "Session not found",
+        "details": {},
+    }
 
 
 @app.get("/api/logs/{session_id}")

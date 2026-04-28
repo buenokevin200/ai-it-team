@@ -158,3 +158,42 @@ def get_config_sync(name: str) -> Optional[str]:
         return None
     except Exception:
         return None
+
+
+def store_log_sync(log: dict) -> str:
+    db_path = os.getenv("DATABASE_PATH", "shared/db/agents.db")
+    log_id = log.get("id") or str(uuid.uuid4())
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "INSERT INTO agent_logs (id, session_id, agent_type, level, message, metadata, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                log_id,
+                log["session_id"],
+                log["agent_type"],
+                log.get("level", "INFO"),
+                log["message"],
+                log.get("metadata"),
+                log.get("created_at", datetime.utcnow().isoformat()),
+            ),
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+    return log_id
+
+
+def update_deployment_sync(session_id: str, status: str, output: Optional[str] = None, error: Optional[str] = None):
+    db_path = os.getenv("DATABASE_PATH", "shared/db/agents.db")
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "UPDATE deployments SET status = ?, output = ?, error = ?, updated_at = datetime('now') WHERE session_id = ?",
+            (status, output, error, session_id),
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
