@@ -8,6 +8,8 @@ interface Props {
     session_id: string;
     status: string;
     intent?: string;
+    intent_explanation?: string;
+    needs_confirmation?: boolean;
     result?: string;
     error?: string;
     details?: Record<string, unknown>;
@@ -41,6 +43,16 @@ export default function Console({ onLog, onResult }: Props) {
       });
       const data = await res.json();
       onResult(data);
+
+      if (data.intent_explanation) {
+        setHistory((prev) => [...prev, `[AI Brain] ${data.intent_explanation}`]);
+      }
+      if (data.needs_confirmation) {
+        setHistory((prev) => [...prev, "⚠ ACCION DESTRUCTIVA DETECTADA - Confirmacion requerida"]);
+      }
+      if (data.error) {
+        setHistory((prev) => [...prev, `ERROR: ${data.error}`]);
+      }
     } catch (err) {
       const msg = `Error: ${err instanceof Error ? err.message : "unknown"}`;
       onLog(msg);
@@ -62,36 +74,35 @@ export default function Console({ onLog, onResult }: Props) {
     <div className="h-full flex flex-col p-4">
       <div className="flex-1 terminal-panel overflow-y-auto mb-4">
         <pre className="text-terminal-muted text-sm whitespace-pre-wrap select-text">
-          {`╔══════════════════════════════════════════════════════╗
-║  AI-First IT Team - Multi-Agent Console             ║
-║  Huawei Cloud Infrastructure Management             ║
-╠══════════════════════════════════════════════════════╣
-║  Comandos disponibles:                              ║
-║                                                     ║
-║  [create|provision] ecs    - Crear nodo ECS         ║
-║  [ssh|connect|configure]   - Administrar via SSH    ║
-║  [deploy|k8s|kubernetes]   - Desplegar en CCE       ║
-║  full|all|stack completo   - Flujo completo         ║
-║                                                     ║
-║  Agentes: Terraform | SSH | Kubernetes (CCE)        ║
-╚══════════════════════════════════════════════════════╝`}
+          {`╔══════════════════════════════════════════════════════════╗
+║  AI-First IT Team - Multi-Agent Console               ║
+║  Agents with Deepseek AI Brain                        ║
+╠══════════════════════════════════════════════════════════╣
+║  Comandos disponibles:                                  ║
+║                                                         ║
+║  "crea un servidor ECS"     → Terraform + AI Brain     ║
+║  "conectate por SSH"        → SSH Agent + AI Brain     ║
+║  "despliega en kubernetes"  → K8s Agent + AI Brain     ║
+║  "stack completo con docker" → Flujo multi-step + AI   ║
+║                                                         ║
+║  Agentes: Terraform | SSH | Kubernetes | AI (Deepseek) ║
+╚══════════════════════════════════════════════════════════╝`}
         </pre>
         {history.length > 0 && (
           <div className="mt-4">
-            {history.map((line, i) => (
-              <div
-                key={i}
-                className={`text-sm py-0.5 ${
-                  line.startsWith("$")
-                    ? "text-terminal-cyan"
-                    : line.startsWith("ERROR")
-                    ? "text-red-400"
-                    : "text-terminal-white"
-                }`}
-              >
-                {line}
-              </div>
-            ))}
+            {history.map((line, i) => {
+              let color = "text-terminal-white";
+              if (line.startsWith("$")) color = "text-terminal-cyan";
+              else if (line.startsWith("[AI Brain]")) color = "text-purple-400";
+              else if (line.startsWith("ERROR")) color = "text-red-400";
+              else if (line.includes("⚠")) color = "text-yellow-400";
+
+              return (
+                <div key={i} className={`text-sm py-0.5 ${color}`}>
+                  {line}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -104,7 +115,7 @@ export default function Console({ onLog, onResult }: Props) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="create ecs..."
+          placeholder="crea un servidor ECS..."
           disabled={loading}
           className="flex-1 terminal-input"
           autoComplete="off"
@@ -114,7 +125,7 @@ export default function Console({ onLog, onResult }: Props) {
           disabled={loading || !input.trim()}
           className="terminal-btn-primary"
         >
-          {loading ? "..." : "Run"}
+          {loading ? "AI pensando..." : "Run"}
         </button>
       </div>
     </div>

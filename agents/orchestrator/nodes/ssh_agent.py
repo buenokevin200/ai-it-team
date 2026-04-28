@@ -28,12 +28,15 @@ def ssh_node(state: AgentState) -> AgentState:
     import os
     ssh_username = get_config_sync("ssh_username") or os.getenv("SSH_USERNAME", "root")
     ssh_key_pem = get_config_sync("ssh_private_key") or os.getenv("SSH_PRIVATE_KEY", "")
+    ssh_password = get_config_sync("ssh_password") or os.getenv("SSH_PASSWORD", "")
 
-    if not ssh_key_pem:
+    auth_method = "key" if ssh_key_pem else "password" if ssh_password else None
+
+    if not auth_method:
         logs.append({
             "agent_type": "ssh",
             "level": "WARN",
-            "message": "No se encontro SSH_PRIVATE_KEY en variables de entorno. Modo simulado.",
+            "message": "Sin credenciales SSH (key ni password). Modo simulado.",
             "session_id": session_id,
         })
         state["ssh_result"] = {
@@ -50,19 +53,22 @@ def ssh_node(state: AgentState) -> AgentState:
         state["logs"] = logs
         return state
 
+    state["ssh_auth_method"] = auth_method
+
     try:
         from tools.ssh_client import SSHClientManager
 
         with SSHClientManager(
             host=ecs_ip,
             username=ssh_username,
-            key_pem=ssh_key_pem,
+            password=ssh_password if ssh_password else None,
+            key_pem=ssh_key_pem if ssh_key_pem else None,
         ) as ssh:
             result = ssh.execute("whoami && hostname && uname -a")
             logs.append({
                 "agent_type": "ssh",
                 "level": "INFO",
-                "message": f"SSH conectado: {result['stdout'][:200]}",
+                "message": f"SSH conectado ({auth_method}): {result['stdout'][:200]}",
                 "session_id": session_id,
             })
 
@@ -81,6 +87,7 @@ def ssh_node(state: AgentState) -> AgentState:
                 "hostname_check": result["stdout"].strip(),
                 "docker_install_exit_code": docker_result["exit_code"],
                 "docker_install_output": docker_result["stdout"][:500],
+                "auth_method": auth_method,
             }
     except Exception as e:
         state["error"] = f"Error SSH: {str(e)}"

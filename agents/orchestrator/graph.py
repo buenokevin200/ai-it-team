@@ -50,33 +50,78 @@ Siempre responde en el siguiente formato estructurado:
 """
 
 
+def _fallback_intent(user_input: str) -> str:
+    text = user_input.lower()
+    if any(kw in text for kw in ["terraform", "ecs", "vpc", "eip", "security group", "infra", "crear servidor", "create server", "provision"]):
+        return "terraform"
+    if any(kw in text for kw in ["ssh", "conectar", "connect", "install docker", "instalar", "configurar servidor", "configure"]):
+        return "ssh"
+    if any(kw in text for kw in ["kubernetes", "k8s", "cce", "helm", "deploy", "desplegar", "pod", "cluster"]):
+        return "kubernetes"
+    if any(kw in text for kw in ["multi", "full", "completo", "everything", "all", "full stack", "stack completo"]):
+        return "multi_step"
+    return "terraform"
+
+
 def parse_intent(state: AgentState) -> AgentState:
     user_input = state["user_input"].lower()
 
-    if any(kw in user_input for kw in ["terraform", "ecs", "vpc", "eip", "security group", "infra", "crear servidor", "create server", "provision"]):
-        state["intent"] = "terraform"
-    elif any(kw in user_input for kw in ["ssh", "conectar", "connect", "install docker", "instalar", "configurar servidor", "configure"]):
-        state["intent"] = "ssh"
-    elif any(kw in user_input for kw in ["kubernetes", "k8s", "cce", "helm", "deploy", "desplegar", "pod", "cluster"]):
-        state["intent"] = "kubernetes"
-    elif any(kw in user_input for kw in ["multi", "full", "completo", "everything", "all", "full stack", "stack completo"]):
-        state["intent"] = "multi_step"
-    else:
-        state["intent"] = "terraform"
+    try:
+        from agents.llm.brain import AgentBrain
 
-    state["logs"] = state.get("logs", []) + [
-        {
-            "agent_type": "orchestrator",
-            "level": "INFO",
-            "message": f"Intencion clasificada: {state['intent']}",
-            "session_id": state["session_id"],
-        }
-    ]
+        brain = AgentBrain()
+        intent = brain.intent(user_input)
+        explanation = brain.explain_plan(user_input, intent)
+
+        if intent == "unknown":
+            intent = _fallback_intent(user_input)
+            explanation = f"No se pudo determinar intencion. Usando fallback: {intent}"
+
+        state["intent"] = intent
+        state["intent_explanation"] = explanation
+        state["needs_confirmation"] = brain.needs_confirmation(intent, user_input)
+
+        state["logs"] = state.get("logs", []) + [
+            {
+                "agent_type": "ai_brain",
+                "level": "INFO",
+                "message": f"[Deepseek] Intencion: {intent}",
+                "session_id": state["session_id"],
+            },
+            {
+                "agent_type": "orchestrator",
+                "level": "INFO",
+                "message": f"Plan: {explanation}",
+                "session_id": state["session_id"],
+            },
+        ]
+        if state["needs_confirmation"]:
+            state["logs"].append({
+                "agent_type": "orchestrator",
+                "level": "WARN",
+                "message": "Accion destructiva detectada. Requiere confirmacion humana.",
+                "session_id": state["session_id"],
+            })
+    except Exception:
+        intent = _fallback_intent(user_input)
+        state["intent"] = intent
+        state["logs"] = state.get("logs", []) + [
+            {
+                "agent_type": "orchestrator",
+                "level": "INFO",
+                "message": f"Intencion clasificada (fallback): {intent}",
+                "session_id": state["session_id"],
+            }
+        ]
+
     return state
 
 
-def router(state: AgentState) -> Literal["terraform", "ssh", "kubernetes", END]:
+def router(state: AgentState) -> Literal["terraform", "ssh", "kubernetes", "__end__"]:
     intent = state.get("intent", "terraform")
+
+    if state.get("needs_confirmation"):
+        return "__end__"
 
     if intent == "multi_step":
         if not state.get("ecs_ip"):
@@ -85,9 +130,9 @@ def router(state: AgentState) -> Literal["terraform", "ssh", "kubernetes", END]:
             return "ssh"
         if not state.get("kube_result"):
             return "kubernetes"
-        return END
+        return "__end__"
 
-    return intent
+    return intent  # type: ignore[return-value]
 
 
 def build_graph() -> StateGraph:

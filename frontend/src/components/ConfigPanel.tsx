@@ -72,6 +72,15 @@ const DEFAULT_FIELDS: ConfigField[] = [
     sensitive: false,
   },
   {
+    name: "ssh_password",
+    label: "SSH Password",
+    description: "Alternative auth: password-based SSH login",
+    category: "ssh_password",
+    value: "",
+    configured: false,
+    sensitive: true,
+  },
+  {
     name: "kubeconfig",
     label: "Kubeconfig",
     description: "Kubernetes config YAML for CCE cluster",
@@ -94,6 +103,33 @@ const DEFAULT_FIELDS: ConfigField[] = [
     label: "Helm Chart",
     description: "Default Helm chart (e.g. stable/nginx-ingress)",
     category: "helm_chart",
+    value: "",
+    configured: false,
+    sensitive: false,
+  },
+  {
+    name: "ai_deepseek_api_key",
+    label: "Deepseek API Key",
+    description: "API key for AI agent reasoning engine",
+    category: "ai_deepseek_api_key",
+    value: "",
+    configured: false,
+    sensitive: true,
+  },
+  {
+    name: "ai_deepseek_base_url",
+    label: "Deepseek Base URL",
+    description: "Custom API endpoint (default: https://api.deepseek.com)",
+    category: "ai_deepseek_base_url",
+    value: "",
+    configured: false,
+    sensitive: false,
+  },
+  {
+    name: "ai_deepseek_model",
+    label: "Deepseek Model",
+    description: "Model name (default: deepseek-chat)",
+    category: "ai_deepseek_model",
     value: "",
     configured: false,
     sensitive: false,
@@ -252,11 +288,22 @@ export default function ConfigPanel({ onLog }: Props) {
       </div>
 
       <div className="space-y-3 overflow-y-auto" style={{ maxHeight: "calc(100vh - 180px)" }}>
-        <div className="terminal-panel">
-          <h3 className="text-terminal-white text-xs font-bold mb-3 pb-2 border-b border-terminal-border flex items-center gap-2">
-            <span className="text-terminal-green">{">"}</span>
-            Huawei Cloud Credentials
-          </h3>
+        <Section title="Inteligencia Artificial (Deepseek)" color="text-purple-400">
+          {fields
+            .filter((f) => f.category.startsWith("ai_"))
+            .map((field) => (
+              <ConfigRow
+                key={field.name}
+                field={field}
+                editedValue={editedValues[field.name]}
+                onChange={handleChange}
+                onSave={saveField}
+                onDelete={deleteField}
+              />
+            ))}
+        </Section>
+
+        <Section title="Huawei Cloud Credentials" color="text-terminal-green">
           {fields
             .filter((f) => f.category.startsWith("hwc_"))
             .map((field) => (
@@ -269,13 +316,9 @@ export default function ConfigPanel({ onLog }: Props) {
                 onDelete={deleteField}
               />
             ))}
-        </div>
+        </Section>
 
-        <div className="terminal-panel">
-          <h3 className="text-terminal-white text-xs font-bold mb-3 pb-2 border-b border-terminal-border flex items-center gap-2">
-            <span className="text-terminal-cyan">{">"}</span>
-            SSH Configuration
-          </h3>
+        <Section title="SSH Configuration" color="text-terminal-cyan">
           {fields
             .filter((f) => f.category.startsWith("ssh_"))
             .map((field) => (
@@ -288,13 +331,9 @@ export default function ConfigPanel({ onLog }: Props) {
                 onDelete={deleteField}
               />
             ))}
-        </div>
+        </Section>
 
-        <div className="terminal-panel">
-          <h3 className="text-terminal-white text-xs font-bold mb-3 pb-2 border-b border-terminal-border flex items-center gap-2">
-            <span className="text-terminal-muted">{">"}</span>
-            Kubernetes / CCE Configuration
-          </h3>
+        <Section title="Kubernetes / CCE Configuration" color="text-terminal-muted">
           {fields
             .filter((f) => f.category.startsWith("kube") || f.category.startsWith("helm"))
             .map((field) => (
@@ -307,8 +346,20 @@ export default function ConfigPanel({ onLog }: Props) {
                 onDelete={deleteField}
               />
             ))}
-        </div>
+        </Section>
       </div>
+    </div>
+  );
+}
+
+function Section({ title, color, children }: { title: string; color: string; children: React.ReactNode }) {
+  return (
+    <div className="terminal-panel">
+      <h3 className={`text-terminal-white text-xs font-bold mb-3 pb-2 border-b border-terminal-border flex items-center gap-2`}>
+        <span className={color}>{">"}</span>
+        {title}
+      </h3>
+      {children}
     </div>
   );
 }

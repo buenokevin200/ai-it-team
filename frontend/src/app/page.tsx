@@ -4,11 +4,12 @@ import { useState } from "react";
 import LogViewer from "@/components/LogViewer";
 import Console from "@/components/Console";
 import ConfigPanel from "@/components/ConfigPanel";
+import AgentMesh from "@/components/AgentMesh";
 
-type Panel = "logs" | "console" | "config";
+type Panel = "console" | "logs" | "mesh" | "config";
 
 export default function Dashboard() {
-  const [activePanel, setActivePanel] = useState<Panel>("console");
+  const [activePanel, setActivePanel] = useState<Panel>("mesh");
   const [logs, setLogs] = useState<string[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
 
@@ -20,6 +21,8 @@ export default function Dashboard() {
     session_id: string;
     status: string;
     intent?: string;
+    intent_explanation?: string;
+    needs_confirmation?: boolean;
     result?: string;
     error?: string;
     details?: Record<string, unknown>;
@@ -27,11 +30,24 @@ export default function Dashboard() {
     setSessionId(result.session_id);
     addLog(`SESSION: ${result.session_id}`);
     addLog(`INTENT: ${result.intent || "unknown"}`);
+    if (result.intent_explanation)
+      addLog(`AI PLAN: ${result.intent_explanation}`);
     addLog(`STATUS: ${result.status}`);
+    if (result.needs_confirmation)
+      addLog(`⚠ CONFIRMACION REQUERIDA: Accion destructiva detectada`);
     if (result.result) addLog(`RESULT: ${result.result}`);
     if (result.error) addLog(`ERROR: ${result.error}`);
     if (result.details?.ecs_ip)
       addLog(`ECS_IP: ${result.details.ecs_ip}`);
+  };
+
+  const tabLabel = (p: Panel) => {
+    switch (p) {
+      case "console": return "Console";
+      case "logs": return "Logs";
+      case "mesh": return "Agent Mesh";
+      case "config": return "Configuracion";
+    }
   };
 
   return (
@@ -44,7 +60,7 @@ export default function Dashboard() {
           </span>
         </div>
         <nav className="flex gap-1">
-          {(["console", "logs", "config"] as Panel[]).map((p) => (
+          {(["console", "logs", "mesh", "config"] as Panel[]).map((p) => (
             <button
               key={p}
               onClick={() => setActivePanel(p)}
@@ -54,7 +70,7 @@ export default function Dashboard() {
                   : "text-terminal-muted hover:text-terminal-white"
               }`}
             >
-              {p === "console" ? "Console" : p === "logs" ? "Logs" : "Configuracion"}
+              {tabLabel(p)}
             </button>
           ))}
         </nav>
@@ -70,13 +86,14 @@ export default function Dashboard() {
           <Console onLog={addLog} onResult={handleCommandResult} />
         )}
         {activePanel === "logs" && <LogViewer logs={logs} />}
+        {activePanel === "mesh" && <AgentMesh />}
         {activePanel === "config" && <ConfigPanel onLog={addLog} />}
       </main>
 
       <footer className="border-t border-terminal-border bg-terminal-panel px-6 py-1.5 flex items-center justify-between text-xs text-terminal-muted">
         <span>Huawei Cloud Provider: huaweicloud/huaweicloud ~<strong>1.60</strong></span>
-        <span>Agents: Terraform | SSH | Kubernetes (CCE)</span>
-        <span>v1.0.0</span>
+        <span>Agents: Terraform | SSH | Kubernetes (CCE) | AI Brain (Deepseek)</span>
+        <span>v2.0.0</span>
       </footer>
     </div>
   );

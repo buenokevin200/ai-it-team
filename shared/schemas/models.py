@@ -11,6 +11,15 @@ class AgentType(str, Enum):
     TERRAFORM = "terraform"
     SSH = "ssh"
     KUBERNETES = "kubernetes"
+    ORCHESTRATOR = "orchestrator"
+    AI_BRAIN = "ai_brain"
+
+
+class AgentStatus(str, Enum):
+    IDLE = "idle"
+    RUNNING = "running"
+    SUCCESS = "success"
+    ERROR = "error"
 
 
 class LogLevel(str, Enum):
@@ -27,6 +36,13 @@ class SecretCategory(str, Enum):
     HWC_PROJECT_ID = "hwc_project_id"
     SSH_PRIVATE_KEY = "ssh_private_key"
     SSH_USERNAME = "ssh_username"
+    SSH_PASSWORD = "ssh_password"
+    KUBECONFIG = "kubeconfig"
+    HELM_RELEASE = "helm_release"
+    HELM_CHART = "helm_chart"
+    DEEPSEEK_API_KEY = "ai_deepseek_api_key"
+    DEEPSEEK_BASE_URL = "ai_deepseek_base_url"
+    DEEPSEEK_MODEL = "ai_deepseek_model"
 
 
 class SecretCreate(BaseModel):
@@ -63,9 +79,19 @@ class AgentResponse(BaseModel):
     session_id: str
     status: str
     intent: Optional[str] = None
+    intent_explanation: Optional[str] = None
+    needs_confirmation: bool = False
     result: Optional[str] = None
     error: Optional[str] = None
     details: Optional[dict] = None
+
+
+class AgentStatusInfo(BaseModel):
+    id: str
+    name: str
+    status: AgentStatus = AgentStatus.IDLE
+    last_run: Optional[str] = None
+    metrics: dict = Field(default_factory=lambda: {"runs": 0, "success": 0, "errors": 0})
 
 
 class DeploymentResponse(BaseModel):
