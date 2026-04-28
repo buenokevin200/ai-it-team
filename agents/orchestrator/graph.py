@@ -132,6 +132,13 @@ def router(state: AgentState) -> Literal["terraform", "ssh", "kubernetes", "__en
             return "kubernetes"
         return "__end__"
 
+    if intent == "terraform" and state.get("ecs_ip"):
+        return "__end__"
+    if intent == "ssh" and state.get("ssh_result"):
+        return "__end__"
+    if intent == "kubernetes" and state.get("kube_result"):
+        return "__end__"
+
     return intent  # type: ignore[return-value]
 
 

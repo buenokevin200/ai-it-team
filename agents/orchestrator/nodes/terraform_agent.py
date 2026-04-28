@@ -125,14 +125,30 @@ def terraform_node(state: AgentState) -> AgentState:
     work_dir = tempfile.mkdtemp(prefix=f"tf-{stack_name}-")
 
     try:
+        region = get_config_sync("hwc_region") or os.getenv("TF_VAR_region", "la-north-2")
+        access_key = get_config_sync("hwc_access_key") or os.getenv("TF_VAR_access_key", "")
+        secret_key = get_config_sync("hwc_secret_key") or os.getenv("TF_VAR_secret_key", "")
+        project_id = get_config_sync("hwc_project_id") or os.getenv("TF_VAR_project_id", "")
+
+        if not access_key or not secret_key:
+            state["error"] = "Credenciales Huawei Cloud no configuradas. Ve a Configuracion > Huawei Cloud Credentials."
+            logs.append({
+                "agent_type": "terraform",
+                "level": "ERROR",
+                "message": state["error"],
+                "session_id": session_id,
+            })
+            state["logs"] = logs
+            return state
+
         generate_provider_tf(work_dir)
         generate_ecs_tf(work_dir, stack_name)
 
         tf_env = os.environ.copy()
-        tf_env["TF_VAR_region"] = get_config_sync("hwc_region") or os.getenv("TF_VAR_region", "la-north-2")
-        tf_env["TF_VAR_access_key"] = get_config_sync("hwc_access_key") or os.getenv("TF_VAR_access_key", "")
-        tf_env["TF_VAR_secret_key"] = get_config_sync("hwc_secret_key") or os.getenv("TF_VAR_secret_key", "")
-        tf_env["TF_VAR_project_id"] = get_config_sync("hwc_project_id") or os.getenv("TF_VAR_project_id", "")
+        tf_env["TF_VAR_region"] = region
+        tf_env["TF_VAR_access_key"] = access_key
+        tf_env["TF_VAR_secret_key"] = secret_key
+        tf_env["TF_VAR_project_id"] = project_id
 
         init_result = subprocess.run(
             ["terraform", "init"],
