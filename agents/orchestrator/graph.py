@@ -146,9 +146,9 @@ def build_graph() -> StateGraph:
     workflow.set_entry_point("parse")
 
     workflow.add_conditional_edges("parse", router)
-    workflow.add_edge("terraform", router)  # type: ignore[arg-type]
-    workflow.add_edge("ssh", router)  # type: ignore[arg-type]
-    workflow.add_edge("kubernetes", router)  # type: ignore[arg-type]
+    workflow.add_conditional_edges("terraform", router)
+    workflow.add_conditional_edges("ssh", router)
+    workflow.add_conditional_edges("kubernetes", router)
 
     return workflow.compile()
 
