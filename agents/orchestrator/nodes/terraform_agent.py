@@ -1,6 +1,7 @@
 import os
 import json
 import uuid
+import shutil
 import tempfile
 import subprocess
 from datetime import datetime
@@ -125,6 +126,17 @@ def terraform_node(state: AgentState) -> AgentState:
     work_dir = tempfile.mkdtemp(prefix=f"tf-{stack_name}-")
 
     try:
+        if not shutil.which("terraform"):
+            state["error"] = "Terraform no instalado en el contenedor. Revisa el Dockerfile."
+            logs.append({
+                "agent_type": "terraform",
+                "level": "ERROR",
+                "message": state["error"],
+                "session_id": session_id,
+            })
+            state["logs"] = logs
+            return state
+
         region = get_config_sync("hwc_region") or os.getenv("TF_VAR_region", "la-north-2")
         access_key = get_config_sync("hwc_access_key") or os.getenv("TF_VAR_access_key", "")
         secret_key = get_config_sync("hwc_secret_key") or os.getenv("TF_VAR_secret_key", "")

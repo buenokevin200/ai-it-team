@@ -144,10 +144,17 @@ async def get_all_config():
     return results
 
 
+def _sync_connect(db_path: str) -> sqlite3.Connection:
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    return conn
+
+
 def get_config_sync(name: str) -> Optional[str]:
     db_path = os.getenv("DATABASE_PATH", "shared/db/agents.db")
     try:
-        conn = sqlite3.connect(db_path)
+        conn = _sync_connect(db_path)
         cursor = conn.execute("SELECT encrypted_value FROM secrets WHERE name = ?", (name,))
         row = cursor.fetchone()
         conn.close()
@@ -164,7 +171,7 @@ def store_log_sync(log: dict) -> str:
     db_path = os.getenv("DATABASE_PATH", "shared/db/agents.db")
     log_id = log.get("id") or str(uuid.uuid4())
     try:
-        conn = sqlite3.connect(db_path)
+        conn = _sync_connect(db_path)
         conn.execute(
             "INSERT INTO agent_logs (id, session_id, agent_type, level, message, metadata, created_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -188,7 +195,7 @@ def store_log_sync(log: dict) -> str:
 def update_deployment_sync(session_id: str, status: str, output: Optional[str] = None, error: Optional[str] = None):
     db_path = os.getenv("DATABASE_PATH", "shared/db/agents.db")
     try:
-        conn = sqlite3.connect(db_path)
+        conn = _sync_connect(db_path)
         conn.execute(
             "UPDATE deployments SET status = ?, output = ?, error = ?, updated_at = datetime('now') WHERE session_id = ?",
             (status, output, error, session_id),

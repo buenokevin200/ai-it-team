@@ -143,79 +143,83 @@ async def agent_status():
 
 
 def _run_graph_in_thread(session_id: str, initial_state: AgentState, command: str):
-    try:
-        _agent_metrics["orchestrator"]["runs"] += 1
-        _agent_metrics["ai_brain"]["runs"] += 1
+    import threading
 
-        store_log_sync({
-            "session_id": session_id,
-            "agent_type": "orchestrator",
-            "level": "INFO",
-            "message": f"Iniciando ejecucion: {command[:100]}",
-        })
+    def _execute():
+        try:
+            _agent_metrics["orchestrator"]["runs"] += 1
+            _agent_metrics["ai_brain"]["runs"] += 1
 
-        result = graph.invoke(initial_state)
+            store_log_sync({
+                "session_id": session_id,
+                "agent_type": "orchestrator",
+                "level": "INFO",
+                "message": f"Iniciando ejecucion: {command[:100]}",
+            })
 
-        status = "success"
-        if result.get("error"):
-            status = "error"
-            _agent_metrics["orchestrator"]["errors"] += 1
-        else:
-            _agent_metrics["orchestrator"]["success"] += 1
-        _agent_metrics["ai_brain"]["success"] += 1
+            result = graph.invoke(initial_state)
 
-        for log in result.get("logs", []):
-            store_log_sync(log)
-
-        intent = result.get("intent", "")
-        agent_key = intent if intent in ("terraform", "ssh", "kubernetes") else None
-        if agent_key:
-            _agent_metrics[agent_key]["runs"] += 1
-            if status == "success":
-                _agent_metrics[agent_key]["success"] += 1
+            status = "success"
+            if result.get("error"):
+                status = "error"
+                _agent_metrics["orchestrator"]["errors"] += 1
             else:
-                _agent_metrics[agent_key]["errors"] += 1
+                _agent_metrics["orchestrator"]["success"] += 1
+            _agent_metrics["ai_brain"]["success"] += 1
 
-        output = str(result.get("ssh_result") or result.get("kube_result") or "")
-        _running_sessions[session_id] = {
-            "status": status,
-            "intent": intent,
-            "intent_explanation": result.get("intent_explanation"),
-            "needs_confirmation": result.get("needs_confirmation", False),
-            "result": output,
-            "error": result.get("error"),
-            "ecs_ip": result.get("ecs_ip"),
-            "stack_name": result.get("stack_name"),
-        }
+            for log in result.get("logs", []):
+                store_log_sync(log)
 
-        _running_sessions[session_id] = {
-            "status": status,
-            "intent": intent,
-            "intent_explanation": result.get("intent_explanation"),
-            "needs_confirmation": result.get("needs_confirmation", False),
-            "result": output,
-            "error": result.get("error"),
-            "ecs_ip": result.get("ecs_ip"),
-            "stack_name": result.get("stack_name"),
-        }
+            intent = result.get("intent", "")
+            agent_key = intent if intent in ("terraform", "ssh", "kubernetes") else None
+            if agent_key:
+                _agent_metrics[agent_key]["runs"] += 1
+                if status == "success":
+                    _agent_metrics[agent_key]["success"] += 1
+                else:
+                    _agent_metrics[agent_key]["errors"] += 1
 
-        store_log_sync({
-            "session_id": session_id,
-            "agent_type": "orchestrator",
-            "level": "INFO" if status == "success" else "ERROR",
-            "message": f"Ejecucion completada: {status}",
-        })
-    except Exception as e:
-        _agent_metrics["orchestrator"]["errors"] += 1
-        _running_sessions[session_id] = {
-            "status": "error",
-            "error": str(e),
-        }
+            output = str(result.get("ssh_result") or result.get("kube_result") or "")
+            _running_sessions[session_id] = {
+                "status": status,
+                "intent": intent,
+                "intent_explanation": result.get("intent_explanation"),
+                "needs_confirmation": result.get("needs_confirmation", False),
+                "result": output,
+                "error": result.get("error"),
+                "ecs_ip": result.get("ecs_ip"),
+                "stack_name": result.get("stack_name"),
+            }
+
+            store_log_sync({
+                "session_id": session_id,
+                "agent_type": "orchestrator",
+                "level": "INFO" if status == "success" else "ERROR",
+                "message": f"Ejecucion completada: {status}",
+            })
+        except Exception as e:
+            _agent_metrics["orchestrator"]["errors"] += 1
+            error_msg = str(e)
+            _running_sessions[session_id] = {"status": "error", "error": error_msg}
+            store_log_sync({
+                "session_id": session_id,
+                "agent_type": "orchestrator",
+                "level": "ERROR",
+                "message": f"Error en ejecucion: {error_msg}",
+            })
+
+    thread = threading.Thread(target=_execute, daemon=True)
+    thread.start()
+    thread.join(timeout=300)
+
+    if thread.is_alive():
+        error_msg = "Tiempo de espera agotado (300s). La operacion fue cancelada."
+        _running_sessions[session_id] = {"status": "error", "error": error_msg}
         store_log_sync({
             "session_id": session_id,
             "agent_type": "orchestrator",
             "level": "ERROR",
-            "message": f"Error: {str(e)}",
+            "message": error_msg,
         })
 
 

@@ -28,8 +28,15 @@ export default function Console({ onLog, onResult }: Props) {
   }, []);
 
   const pollResult = async (sid: string) => {
+    let attempts = 0;
     while (true) {
       await new Promise((r) => setTimeout(r, 2000));
+      attempts++;
+
+      if (attempts === 15) {
+        setHistory((prev) => [...prev, "⚠ La operacion esta tomando mas de 30 segundos. Verifica los logs en la pestana Logs."]);
+      }
+
       try {
         const res = await fetch(`/api/deployments/${sid}`);
         const data = await res.json();
